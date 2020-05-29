@@ -12,4 +12,4 @@ require (
 	gopkg.in/gcfg.v1 v1.2.3 // indirect
 )
 
-replace github.com/vladionescu/keybase-gitea-bot/giteabot => ./giteabot
+//replace github.com/vladionescu/keybase-gitea-bot/giteabot => ./giteabot
