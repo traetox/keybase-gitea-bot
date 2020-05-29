@@ -97,17 +97,12 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		message = FormatForkMsg(
 			event.Forkee.FullName,
 			event.Repo.FullName,
-			)
+		)
 
 		repo = event.Forkee.FullName
 		secret = event.Secret
 	case *gitea.IssuePayload:
-		var assignee string
-
-		if event.Issue.Assignee != nil {
-			assignee = event.Issue.Assignee.FullName
-		}
-
+		assignee := getAssignees(event.Issue.Assignee, event.Issue.Assignees)
 		message = FormatIssueMsg(
 			event.Action,
 			event.Sender.FullName,
@@ -117,6 +112,20 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			event.Issue.Title,
 			event.Issue.URL,
 		)
+		if h.handler.dmUsers {
+			handled, err := h.handleDMs(
+				event.Issue.Poster,
+				event.Issue.Assignee,
+				event.Issue.Assignees,
+				message)
+			if err != nil {
+				h.Errorf("Failed to handle DMS for repo %s: %v",
+					event.Repository.FullName, err)
+				return
+			} else if handled {
+				return
+			}
+		}
 
 		repo = event.Repository.FullName
 		secret = event.Secret
@@ -130,6 +139,20 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			event.Issue.Title,
 			event.Comment.HTMLURL,
 		)
+		if h.handler.dmUsers {
+			handled, err := h.handleDMs(
+				event.Comment.Poster,
+				event.Issue.Assignee,
+				event.Issue.Assignees,
+				message)
+			if err != nil {
+				h.Errorf("Failed to handle DMS for repo %s: %v",
+					event.Repository.FullName, err)
+				return
+			} else if handled {
+				return
+			}
+		}
 
 		repo = event.Repository.FullName
 		secret = event.Secret
@@ -155,11 +178,7 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		repo = event.Repository.FullName
 		secret = event.Secret
 	case *gitea.PullRequestPayload:
-		var assignee string
-
-		if event.PullRequest.Assignee != nil {
-			assignee = event.PullRequest.Assignee.FullName
-		}
+		assignee := getAssignees(event.PullRequest.Assignee, event.PullRequest.Assignees)
 
 		source := fmt.Sprintf("%s/%s", event.PullRequest.Head.Repository.FullName, event.PullRequest.Head.Name)
 
@@ -173,6 +192,20 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			assignee,
 			event.PullRequest.URL,
 		)
+		if h.handler.dmUsers {
+			handled, err := h.handleDMs(
+				event.PullRequest.Poster,
+				event.PullRequest.Assignee,
+				event.PullRequest.Assignees,
+				message)
+			if err != nil {
+				h.Errorf("Failed to handle DMS for repo %s: %v",
+					event.Repository.FullName, err)
+				return
+			} else if handled {
+				return
+			}
+		}
 
 		repo = event.Repository.FullName
 		secret = event.Secret
@@ -197,4 +230,43 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		h.ChatEcho(convID, message)
 	}
+}
+
+// handleDMs will send chat messages directly to assignees if we can resolve the keybase names
+// return values are handled and error
+//  handled means we got all messages off to all assignees
+// we will NOT DM users if they are the origininator of the gitea event
+func (h *HTTPSrv) handleDMs(sender, assignee *gitea.User, assignees []*gitea.User, msg string, args ...interface{}) (handled bool, err error) {
+	var ok bool
+	if sender == nil || (assignee == nil && len(assignees) == 0) || len(h.handler.users) == 0 {
+		return //just ignore it, go the usual route
+	}
+	handled = true //we assume success
+	if assignee != nil && sender.ID != assignee.ID {
+		if ok, err = h.handleDM(assignee.UserName, msg, args...); err != nil {
+			return
+		} else if !ok {
+			handled = false
+		}
+	}
+	for _, u := range assignees {
+		if u == nil || u.ID == sender.ID {
+			continue
+		}
+		if ok, err = h.handleDM(u.UserName, msg, args...); err != nil {
+			return
+		} else if !ok {
+			handled = false
+		}
+	}
+	return
+}
+
+func (h *HTTPSrv) handleDM(user, msg string, args ...interface{}) (ok bool, err error) {
+	var kbuser string
+	//try to lookup the keybase user
+	if kbuser, ok = h.handler.users[user]; ok {
+		err = h.handler.ChatUser(kbuser, msg, args...)
+	}
+	return
 }

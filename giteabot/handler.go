@@ -1,6 +1,7 @@
 package giteabot
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -12,6 +13,8 @@ import (
 
 type Handler struct {
 	*base.DebugOutput
+	users   map[string]string
+	dmUsers bool
 
 	stats      *base.StatsRegistry
 	kbc        *kbchat.API
@@ -24,7 +27,7 @@ type Handler struct {
 var _ base.Handler = (*Handler)(nil)
 
 func NewHandler(stats *base.StatsRegistry, kbc *kbchat.API, debugConfig *base.ChatDebugOutputConfig,
-	db *DB, httpPrefix string, secret string, giteaURL string) *Handler {
+	db *DB, httpPrefix, secret, giteaURL string, users map[string]string, dmUsers bool) *Handler {
 	return &Handler{
 		DebugOutput: base.NewDebugOutput("Handler", debugConfig),
 		stats:       stats.SetPrefix("Handler"),
@@ -32,7 +35,9 @@ func NewHandler(stats *base.StatsRegistry, kbc *kbchat.API, debugConfig *base.Ch
 		db:          db,
 		httpPrefix:  httpPrefix,
 		secret:      secret,
-		giteaURL:	 giteaURL,
+		giteaURL:    giteaURL,
+		dmUsers:     dmUsers,
+		users:       users,
 	}
 }
 
@@ -63,7 +68,7 @@ func (h *Handler) HandleCommand(msg chat1.MsgSummary) error {
 		h.stats.Count("unsubscribe")
 		return h.handleSubscribe(cmd, msg, false)
 	default:
-		h.ChatEcho(msg.ConvID, "Unknown command.", cmd)
+		h.ChatEcho(msg.ConvID, "Unknown command: %v", cmd)
 	}
 	return nil
 }
@@ -144,4 +149,13 @@ func (h *Handler) handleSubscribe(cmd string, msg chat1.MsgSummary, create bool)
 
 	h.ChatEcho(msg.ConvID, "You aren't subscribed to updates for `%s`!", repo)
 	return nil
+}
+
+func (h *Handler) ChatUser(user, msg string, args ...interface{}) error {
+	if user == `` {
+		return errors.New("no user specified")
+	} else if msg == `` {
+		return errors.New("no message specified")
+	}
+	return base.SendByConvNameOrID(h.kbc, h.DebugOutput, user, msg, args...)
 }

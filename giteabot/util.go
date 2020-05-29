@@ -91,7 +91,7 @@ func ParseWebhook(eventType EventType, payload []byte) (event interface{}, err e
 		return nil, err
 	}
 
-	return event,nil
+	return event, nil
 }
 
 // Return a list of all commit messages from an event
@@ -221,4 +221,20 @@ func FormatPullRequestMsg(action gitea.HookIssueAction, username string, repo st
 	}
 
 	return message
+}
+
+func getAssignees(single *gitea.User, multi []*gitea.User) (r string) {
+	if single != nil {
+		r = single.FullName
+	}
+	for _, u := range multi {
+		if u == nil {
+			continue
+		}
+		if len(r) > 0 {
+			r += `, `
+		}
+		r += u.FullName
+	}
+	return
 }
