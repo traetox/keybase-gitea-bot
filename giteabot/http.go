@@ -110,7 +110,7 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			event.Repository.FullName,
 			assignee,
 			event.Issue.Title,
-			event.Issue.URL,
+			event.Issue.HTMLURL,
 		)
 		if h.handler.dmUsers {
 			handled, err := h.handleDMs(
@@ -190,7 +190,7 @@ func (h *HTTPSrv) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			event.PullRequest.Title,
 			source,
 			assignee,
-			event.PullRequest.URL,
+			event.PullRequest.HTMLURL,
 		)
 		if h.handler.dmUsers {
 			handled, err := h.handleDMs(
