@@ -250,7 +250,9 @@ func (h *HTTPSrv) handleDMs(sender, assignee *gitea.User, assignees []*gitea.Use
 		}
 	}
 	for _, u := range assignees {
-		if u == nil || u.ID == sender.ID {
+		//check against sender and assignee
+		//sender because we don't want to notify on our own actions, and assignee so we don't fire twice
+		if u == nil || u.ID == sender.ID || (assignee != nil && assignee.ID == u.ID) {
 			continue
 		}
 		if ok, err = h.handleDM(u.UserName, msg, args...); err != nil {
